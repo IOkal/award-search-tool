@@ -67,4 +67,20 @@
                                     <h5 class="card-title">Connections</h5>
                                     <ul>${connections}</ul>
                                     <h5 class="card-title">Prices</h5>
-                                    <ul>${prices}</
+                                    <ul>${prices}</ul>
+                                    <h5 class="card-title">Mixed Cabin Percentages</h5>
+                                    <ul>${mixed_cabin_percentages}</ul>
+                                </div>
+                            </div>
+                        `);
+                    });
+                },
+                error: function() {
+                    $('#results').html('<div class="alert alert-danger">An error occurred while searching for flights.</div>');
+                }
+            });
+        });
+    });
+</script>
+</body>
+</html>
