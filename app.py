@@ -41,24 +41,11 @@ def search_flight_live(origin, destination, date):
     options = webdriver.ChromeOptions()
     # Remove headless option to see the browser live
     # options.add_argument('--headless')
-    # options.add_argument('--disable-gpu')
-    # options.add_argument('--no-sandbox')
-    # options.add_argument('--disable-dev-shm-usage')
-    # options.add_argument('--ignore-certificate-errors')
-    # options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
-    # options.add_argument("window-size=1920,1080")
-    # options.add_argument("start-maximized")
-    # options.add_argument("--disable-setuid-sandbox")
-    # options.add_argument("--disable-blink-features=AutomationControlled")
-    # options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    # options.add_experimental_option('useAutomationExtension', False)
     options.add_argument('--disable-gpu')
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-dev-shm-usage')
     # options.add_argument('--ignore-certificate-errors')
     # options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
-    
-
     options.add_argument("window-size=1920,1080")
     options.add_argument("start-maximized")
     options.add_argument("--disable-setuid-sandbox")
@@ -88,13 +75,40 @@ def search_flight_live(origin, destination, date):
         flights_count = flights_count_element.text
         print(f"Flights count text: {flights_count}")
 
-        # Extract number of flights found from the text
-        print("Extracting flights found text...")
-        flights_found_element = driver.find_element(By.CSS_SELECTOR, "span.flights-count + span")
-        flights_found = flights_found_element.text
-        print(f"Flights found: {flights_found}")
+        # Extract flight details
+        print("Extracting flight details...")
+        flight_details = []
 
-        return flights_found
+        flight_containers = driver.find_elements(By.CSS_SELECTOR, "kilo-upsell-row-pres")
+        for container in flight_containers:
+            flight_info = {}
+            flight_info['segments'] = []
+
+            # Extract flight segments
+            segments = container.find_elements(By.CSS_SELECTOR, "kilo-flight-block-card-pres .block-header-container")
+            for segment in segments:
+                segment_info = {}
+                segment_info['departure_time'] = segment.find_element(By.CSS_SELECTOR, ".departure-time").text
+                segment_info['arrival_time'] = segment.find_element(By.CSS_SELECTOR, ".arrival-time").text
+                segment_info['duration'] = segment.find_element(By.CSS_SELECTOR, ".flight-summary").text
+                segment_info['route'] = segment.find_element(By.CSS_SELECTOR, ".destination-row").text
+                segment_info['flight_number'] = segment.find_element(By.CSS_SELECTOR, ".operating-airline").text
+                segment_info['cabin'] = segment.find_element(By.CSS_SELECTOR, ".mat-body-2").text
+                segment_info['mixed_cabin_percentage'] = segment.find_element(By.CSS_SELECTOR, ".mixed-cabin-percentage").text if segment.find_elements(By.CSS_SELECTOR, ".mixed-cabin-percentage") else "N/A"
+                segment_info['aircraft'] = segment.find_element(By.CSS_SELECTOR, ".operating-airline-icon").get_attribute("alt")
+                segment_info['connection_time'] = segment.find_element(By.CSS_SELECTOR, ".connection-time").text if segment.find_elements(By.CSS_SELECTOR, ".connection-time") else "N/A"
+
+                flight_info['segments'].append(segment_info)
+
+            # Extract total flight duration and cost
+            flight_info['total_duration'] = container.find_element(By.CSS_SELECTOR, ".total-duration").text
+            flight_info['total_cost'] = container.find_element(By.CSS_SELECTOR, ".total-cost").text
+
+            flight_details.append(flight_info)
+
+        print(f"Extracted flight details: {flight_details}")
+
+        return flight_details
     except Exception as e:
         print(f"An error occurred: {e}")
         return "Error"
