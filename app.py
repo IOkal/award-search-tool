@@ -17,46 +17,49 @@ def extract_flight_details(container):
         'mixed_cabin_percentages': {}
     }
 
-    # Extract the flight segments from the container
-    flight_description = container.find_element(By.CSS_SELECTOR, ".cdk-visually-hidden").text
-    segment_matches = re.findall(r"SEG-(\w+)-(\w+)-(\d{4}-\d{2}-\d{2}-\d{4})", flight_description)
-    
-    for match in segment_matches:
-        flight_number, route, flight_time = match
-        departure, arrival = route.split('-')
-        segment_info = {
-            'flight_number': flight_number,
-            'route': route,
-            'departure_time': flight_time,
-            'departure': departure,
-            'arrival': arrival
-        }
-        flight_details['segments'].append(segment_info)
+    try:
+        # Extract the flight segments from the container
+        flight_description = container.find_element(By.CSS_SELECTOR, ".cdk-visually-hidden").text
+        segment_matches = re.findall(r"SEG-(\w+)-(\w+)-(\d{4}-\d{2}-\d{2}-\d{4})", flight_description)
+        
+        for match in segment_matches:
+            flight_number, route, flight_time = match
+            departure, arrival = route.split('-')
+            segment_info = {
+                'flight_number': flight_number,
+                'route': route,
+                'departure_time': flight_time,
+                'departure': departure,
+                'arrival': arrival
+            }
+            flight_details['segments'].append(segment_info)
 
-    # Extract layover information
-    layover_matches = re.findall(r"Layover of (\d+h\d+m) in (\w+)", flight_description)
-    for match in layover_matches:
-        layover_time, layover_airport = match
-        flight_details['connections'].append({
-            'layover_time': layover_time,
-            'layover_airport': layover_airport
-        })
+        # Extract layover information
+        layover_matches = re.findall(r"Layover of (\d+h\d+m) in (\w+)", flight_description)
+        for match in layover_matches:
+            layover_time, layover_airport = match
+            flight_details['connections'].append({
+                'layover_time': layover_time,
+                'layover_airport': layover_airport
+            })
 
-    # Extract price and mixed cabin information
-    cabin_classes = ['eco', 'ecoPremium', 'business']
-    for cabin in cabin_classes:
-        try:
-            cabin_container = container.find_element(By.CSS_SELECTOR, f".available-cabin.flight-cabin-cell.{cabin}")
-            price_points = cabin_container.find_element(By.CSS_SELECTOR, ".points-total").text
-            price_cash = cabin_container.find_element(By.CSS_SELECTOR, "kilo-price").text
-            mixed_cabin_percentage = cabin_container.find_element(By.CSS_SELECTOR, ".mixed-cabin-percentage").text if cabin_container.find_elements(By.CSS_SELECTOR, ".mixed-cabin-percentage") else "100%"
-            
-            flight_details['prices'][cabin] = f"{price_points} + {price_cash}"
-            flight_details['mixed_cabin_percentages'][cabin] = mixed_cabin_percentage
-        except Exception as e:
-            print(f"{cabin.capitalize()} class not available: {e}")
-            flight_details['prices'][cabin] = "N/A"
-            flight_details['mixed_cabin_percentages'][cabin] = "N/A"
+        # Extract price and mixed cabin information
+        cabin_classes = ['eco', 'ecoPremium', 'business']
+        for cabin in cabin_classes:
+            try:
+                cabin_container = container.find_element(By.CSS_SELECTOR, f".available-cabin.flight-cabin-cell.{cabin}")
+                price_points = cabin_container.find_element(By.CSS_SELECTOR, ".points-total").text
+                price_cash = cabin_container.find_element(By.CSS_SELECTOR, "kilo-price").text
+                mixed_cabin_percentage = cabin_container.find_element(By.CSS_SELECTOR, ".mixed-cabin-percentage").text if cabin_container.find_elements(By.CSS_SELECTOR, ".mixed-cabin-percentage") else "100%"
+                
+                flight_details['prices'][cabin] = f"{price_points} + {price_cash}"
+                flight_details['mixed_cabin_percentages'][cabin] = mixed_cabin_percentage
+            except Exception as e:
+                print(f"{cabin.capitalize()} class not available: {e}")
+                flight_details['prices'][cabin] = "N/A"
+                flight_details['mixed_cabin_percentages'][cabin] = "N/A"
+    except Exception as e:
+        print(f"Error extracting flight details: {e}")
 
     return flight_details
 
