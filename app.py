@@ -79,30 +79,39 @@ def search_flight_live(origin, destination, date):
         print("Extracting flight details...")
         flight_details = []
 
-        flight_containers = driver.find_elements(By.CSS_SELECTOR, "kilo-upsell-row-pres")
+        # Locate the main container for flight details
+        flight_containers = driver.find_elements(By.CSS_SELECTOR, "kilo-upsell-row-cont")
+        print(f"Found {len(flight_containers)} flight containers.")
+
         for container in flight_containers:
             flight_info = {}
             flight_info['segments'] = []
 
             # Extract flight segments
-            segments = container.find_elements(By.CSS_SELECTOR, "kilo-flight-block-card-pres .block-header-container")
+            segments = container.find_elements(By.CSS_SELECTOR, "kilo-flight-block-card-pres")
+            print(f"Found {len(segments)} segments in current container.")
             for segment in segments:
                 segment_info = {}
-                segment_info['departure_time'] = segment.find_element(By.CSS_SELECTOR, ".departure-time").text
-                segment_info['arrival_time'] = segment.find_element(By.CSS_SELECTOR, ".arrival-time").text
-                segment_info['duration'] = segment.find_element(By.CSS_SELECTOR, ".flight-summary").text
-                segment_info['route'] = segment.find_element(By.CSS_SELECTOR, ".destination-row").text
-                segment_info['flight_number'] = segment.find_element(By.CSS_SELECTOR, ".operating-airline").text
-                segment_info['cabin'] = segment.find_element(By.CSS_SELECTOR, ".mat-body-2").text
-                segment_info['mixed_cabin_percentage'] = segment.find_element(By.CSS_SELECTOR, ".mixed-cabin-percentage").text if segment.find_elements(By.CSS_SELECTOR, ".mixed-cabin-percentage") else "N/A"
-                segment_info['aircraft'] = segment.find_element(By.CSS_SELECTOR, ".operating-airline-icon").get_attribute("alt")
-                segment_info['connection_time'] = segment.find_element(By.CSS_SELECTOR, ".connection-time").text if segment.find_elements(By.CSS_SELECTOR, ".connection-time") else "N/A"
-
-                flight_info['segments'].append(segment_info)
+                try:
+                    segment_info['departure_time'] = segment.find_element(By.CSS_SELECTOR, ".departure-time").text
+                    segment_info['arrival_time'] = segment.find_element(By.CSS_SELECTOR, ".arrival-time").text
+                    segment_info['duration'] = segment.find_element(By.CSS_SELECTOR, ".flight-summary").text
+                    segment_info['route'] = segment.find_element(By.CSS_SELECTOR, ".destination-row").text
+                    segment_info['flight_number'] = segment.find_element(By.CSS_SELECTOR, ".operating-airline").text
+                    segment_info['cabin'] = segment.find_element(By.CSS_SELECTOR, ".mat-body-2").text
+                    segment_info['mixed_cabin_percentage'] = segment.find_element(By.CSS_SELECTOR, ".mixed-cabin-percentage").text if segment.find_elements(By.CSS_SELECTOR, ".mixed-cabin-percentage") else "N/A"
+                    segment_info['aircraft'] = segment.find_element(By.CSS_SELECTOR, ".operating-airline-icon").get_attribute("alt")
+                    segment_info['connection_time'] = segment.find_element(By.CSS_SELECTOR, ".connection-time").text if segment.find_elements(By.CSS_SELECTOR, ".connection-time") else "N/A"
+                    flight_info['segments'].append(segment_info)
+                except Exception as e:
+                    print(f"Error extracting segment info: {e}")
 
             # Extract total flight duration and cost
-            flight_info['total_duration'] = container.find_element(By.CSS_SELECTOR, ".total-duration").text
-            flight_info['total_cost'] = container.find_element(By.CSS_SELECTOR, ".total-cost").text
+            try:
+                flight_info['total_duration'] = container.find_element(By.CSS_SELECTOR, ".total-duration").text
+                flight_info['total_cost'] = container.find_element(By.CSS_SELECTOR, ".total-cost").text
+            except Exception as e:
+                print(f"Error extracting total flight info: {e}")
 
             flight_details.append(flight_info)
 
