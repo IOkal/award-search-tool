@@ -111,8 +111,8 @@ def search_flight_live(origin, destination, date):
 
             # Extract total flight duration and cost
             try:
-                flight_info['total_duration'] = container.find_element(By.CSS_SELECTOR, ".total-duration").text
-                flight_info['total_cost'] = container.find_element(By.CSS_SELECTOR, ".total-cost").text
+                flight_info['total_duration'] = container.find_element(By.CSS_SELECTOR, ".flight-summary").text
+                flight_info['total_cost'] = container.find_element(By.CSS_SELECTOR, ".price-container").text
                 print(f"Total flight info extracted: Duration: {flight_info['total_duration']}, Cost: {flight_info['total_cost']}")
             except Exception as e:
                 print(f"Error extracting total flight info: {e}")
