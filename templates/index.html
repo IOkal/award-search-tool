@@ -5,7 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Flight Search</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.10.21/css/jquery.dataTables.min.css">
     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://cdn.datatables.net/1.10.21/js/jquery.dataTables.min.js"></script>
 </head>
 <body>
 <div class="container">
@@ -26,57 +28,87 @@
         <button type="submit" class="btn btn-primary">Search</button>
     </form>
 
-    <div id="results" class="mt-5"></div>
+    <div class="mt-5">
+        <table id="results-table" class="display" style="width:100%">
+            <thead>
+                <tr>
+                    <th>Flight Time</th>
+                    <th>Route</th>
+                    <th>Flight</th>
+                    <th>Cabin</th>
+                    <th>Mixed Cabin</th>
+                    <th>Aircraft</th>
+                    <th>Connection</th>
+                    <th>Duration</th>
+                    <th>Cost</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
 </div>
 
 <script>
-    $(document).ready(function(){
-        $('#search-form').on('submit', function(e){
+    $(document).ready(function() {
+        var table = $('#results-table').DataTable();
+
+        $('#search-form').on('submit', function(e) {
             e.preventDefault();
             $.ajax({
                 url: '/search',
                 type: 'POST',
                 data: $('#search-form').serialize(),
                 success: function(data) {
-                    $('#results').html('');
-                    data.forEach(function(flight, index){
-                        let segments = flight.segments.map(function(segment){
-                            return `<li>${segment.flight_number} (${segment.route}) - ${segment.departure_time}</li>`;
-                        }).join('');
-                        
-                        let connections = flight.connections.map(function(connection){
-                            return `<li>${connection.layover_time} in ${connection.layover_airport}</li>`;
-                        }).join('');
+                    table.clear().draw();
+                    data.forEach(function(flight) {
+                        flight.segments.forEach(function(segment, index) {
+                            let row = [
+                                segment.departure_time,
+                                segment.route,
+                                segment.flight_number,
+                                index == 0 ? 'eco' : '',
+                                index == 0 ? flight.mixed_cabin_percentages.eco : '',
+                                '', // Placeholder for aircraft type
+                                flight.connections.map(c => c.layover_time + ' in ' + c.layover_airport).join(', '),
+                                '', // Placeholder for duration
+                                flight.prices.eco
+                            ];
+                            table.row.add(row).draw();
+                        });
 
-                        let prices = Object.entries(flight.prices).map(function([cabin, price]){
-                            return `<li>${cabin}: ${price}</li>`;
-                        }).join('');
+                        flight.segments.forEach(function(segment, index) {
+                            let row = [
+                                segment.departure_time,
+                                segment.route,
+                                segment.flight_number,
+                                index == 0 ? 'ecoPremium' : '',
+                                index == 0 ? flight.mixed_cabin_percentages.ecoPremium : '',
+                                '', // Placeholder for aircraft type
+                                flight.connections.map(c => c.layover_time + ' in ' + c.layover_airport).join(', '),
+                                '', // Placeholder for duration
+                                flight.prices.ecoPremium
+                            ];
+                            table.row.add(row).draw();
+                        });
 
-                        let mixed_cabin_percentages = Object.entries(flight.mixed_cabin_percentages).map(function([cabin, percentage]){
-                            return `<li>${cabin}: ${percentage}</li>`;
-                        }).join('');
-
-                        $('#results').append(`
-                            <div class="card mb-3">
-                                <div class="card-header">
-                                    Flight ${index + 1}
-                                </div>
-                                <div class="card-body">
-                                    <h5 class="card-title">Segments</h5>
-                                    <ul>${segments}</ul>
-                                    <h5 class="card-title">Connections</h5>
-                                    <ul>${connections}</ul>
-                                    <h5 class="card-title">Prices</h5>
-                                    <ul>${prices}</ul>
-                                    <h5 class="card-title">Mixed Cabin Percentages</h5>
-                                    <ul>${mixed_cabin_percentages}</ul>
-                                </div>
-                            </div>
-                        `);
+                        flight.segments.forEach(function(segment, index) {
+                            let row = [
+                                segment.departure_time,
+                                segment.route,
+                                segment.flight_number,
+                                index == 0 ? 'business' : '',
+                                index == 0 ? flight.mixed_cabin_percentages.business : '',
+                                '', // Placeholder for aircraft type
+                                flight.connections.map(c => c.layover_time + ' in ' + c.layover_airport).join(', '),
+                                '', // Placeholder for duration
+                                flight.prices.business
+                            ];
+                            table.row.add(row).draw();
+                        });
                     });
                 },
                 error: function() {
-                    $('#results').html('<div class="alert alert-danger">An error occurred while searching for flights.</div>');
+                    alert('An error occurred while searching for flights.');
                 }
             });
         });
