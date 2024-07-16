@@ -83,14 +83,16 @@ def search_flight_live(origin, destination, date):
         flight_containers = driver.find_elements(By.CSS_SELECTOR, "kilo-upsell-row-cont")
         print(f"Found {len(flight_containers)} flight containers.")
 
-        for container in flight_containers:
+        for index, container in enumerate(flight_containers):
+            print(f"Inspecting container {index+1}/{len(flight_containers)}")
+            print(container.get_attribute('outerHTML'))  # Print the HTML of the container for debugging
             flight_info = {}
             flight_info['segments'] = []
 
             # Extract flight segments
             segments = container.find_elements(By.CSS_SELECTOR, "kilo-flight-block-card-pres")
             print(f"Found {len(segments)} segments in current container.")
-            for segment in segments:
+            for segment_index, segment in enumerate(segments):
                 segment_info = {}
                 try:
                     segment_info['departure_time'] = segment.find_element(By.CSS_SELECTOR, ".departure-time").text
@@ -103,6 +105,7 @@ def search_flight_live(origin, destination, date):
                     segment_info['aircraft'] = segment.find_element(By.CSS_SELECTOR, ".operating-airline-icon").get_attribute("alt")
                     segment_info['connection_time'] = segment.find_element(By.CSS_SELECTOR, ".connection-time").text if segment.find_elements(By.CSS_SELECTOR, ".connection-time") else "N/A"
                     flight_info['segments'].append(segment_info)
+                    print(f"Segment {segment_index+1}/{len(segments)} extracted: {segment_info}")
                 except Exception as e:
                     print(f"Error extracting segment info: {e}")
 
@@ -110,6 +113,7 @@ def search_flight_live(origin, destination, date):
             try:
                 flight_info['total_duration'] = container.find_element(By.CSS_SELECTOR, ".total-duration").text
                 flight_info['total_cost'] = container.find_element(By.CSS_SELECTOR, ".total-cost").text
+                print(f"Total flight info extracted: Duration: {flight_info['total_duration']}, Cost: {flight_info['total_cost']}")
             except Exception as e:
                 print(f"Error extracting total flight info: {e}")
 
