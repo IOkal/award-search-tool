@@ -1,46 +1,69 @@
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, jsonify
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-import itertools
-import pandas as pd
+from webdriver_manager.chrome import ChromeDriverManager
+import re
 
 app = Flask(__name__)
 
-@app.route('/')
-def index():
-    return render_template('index.html')
+def extract_flight_details(container):
+    flight_details = {
+        'segments': [],
+        'connections': [],
+        'prices': {},
+        'mixed_cabin_percentages': {}
+    }
 
-@app.route('/search', methods=['POST'])
-def search():
-    origin = request.form['origin'].split(',')
-    destination = request.form['destination'].split(',')
-    date_input = request.form['date']
+    # Extract the flight segments from the container
+    flight_description = container.find_element(By.CSS_SELECTOR, ".cdk-visually-hidden").text
+    segment_matches = re.findall(r"SEG-(\w+)-(\w+)-(\d{4}-\d{2}-\d{2}-\d{4})", flight_description)
     
-    if ':' in date_input:
-        start_date, end_date = date_input.split(':')
-        dates = pd.date_range(start_date, end_date).strftime('%Y-%m-%d').tolist()
-    else:
-        dates = date_input.split(',')
+    for match in segment_matches:
+        flight_number, route, flight_time = match
+        departure, arrival = route.split('-')
+        segment_info = {
+            'flight_number': flight_number,
+            'route': route,
+            'departure_time': flight_time,
+            'departure': departure,
+            'arrival': arrival
+        }
+        flight_details['segments'].append(segment_info)
 
-    permutations = list(itertools.product(origin, destination, dates))
-    results = []
+    # Extract layover information
+    layover_matches = re.findall(r"Layover of (\d+h\d+m) in (\w+)", flight_description)
+    for match in layover_matches:
+        layover_time, layover_airport = match
+        flight_details['connections'].append({
+            'layover_time': layover_time,
+            'layover_airport': layover_airport
+        })
 
-    for org, dest, date in permutations:
-        result = search_flight_live(org.strip(), dest.strip(), date.strip())
-        results.append((org, dest, date, result))
-    
-    return render_template('results.html', results=results, permutations=len(permutations))
+    # Extract price and mixed cabin information
+    cabin_classes = ['eco', 'ecoPremium', 'business']
+    for cabin in cabin_classes:
+        try:
+            cabin_container = container.find_element(By.CSS_SELECTOR, f".available-cabin.flight-cabin-cell.{cabin}")
+            price_points = cabin_container.find_element(By.CSS_SELECTOR, ".points-total").text
+            price_cash = cabin_container.find_element(By.CSS_SELECTOR, "kilo-price").text
+            mixed_cabin_percentage = cabin_container.find_element(By.CSS_SELECTOR, ".mixed-cabin-percentage").text if cabin_container.find_elements(By.CSS_SELECTOR, ".mixed-cabin-percentage") else "100%"
+            
+            flight_details['prices'][cabin] = f"{price_points} + {price_cash}"
+            flight_details['mixed_cabin_percentages'][cabin] = mixed_cabin_percentage
+        except Exception as e:
+            print(f"{cabin.capitalize()} class not available: {e}")
+            flight_details['prices'][cabin] = "N/A"
+            flight_details['mixed_cabin_percentages'][cabin] = "N/A"
+
+    return flight_details
 
 def search_flight_live(origin, destination, date):
     url = f"https://www.aircanada.com/aeroplan/redeem/availability/outbound?org0={origin}&dest0={destination}&departureDate0={date}&ADT=1&YTH=0&CHD=0&INF=0&INS=0&lang=en-CA&tripType=O&marketCode=INT"
     
     options = webdriver.ChromeOptions()
-    # Remove headless option to see the browser live
-    # options.add_argument('--headless')
     options.add_argument('--disable-gpu')
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-dev-shm-usage')
@@ -77,7 +100,7 @@ def search_flight_live(origin, destination, date):
 
         # Extract flight details
         print("Extracting flight details...")
-        flight_details = []
+        flight_details_list = []
 
         # Locate the main container for flight details
         flight_containers = driver.find_elements(By.CSS_SELECTOR, "kilo-upsell-row-cont")
@@ -85,48 +108,35 @@ def search_flight_live(origin, destination, date):
 
         for index, container in enumerate(flight_containers):
             print(f"Inspecting container {index+1}/{len(flight_containers)}")
-            print(container.get_attribute('outerHTML'))  # Print the HTML of the container for debugging
-            flight_info = {}
-            flight_info['segments'] = []
+            flight_details = extract_flight_details(container)
+            flight_details_list.append(flight_details)
+            print(f"Flight details for container {index+1}: {flight_details}")
 
-            # Extract flight segments
-            segments = container.find_elements(By.CSS_SELECTOR, "kilo-flight-block-card-pres")
-            print(f"Found {len(segments)} segments in current container.")
-            for segment_index, segment in enumerate(segments):
-                segment_info = {}
-                try:
-                    segment_info['departure_time'] = segment.find_element(By.CSS_SELECTOR, ".departure-time").text
-                    segment_info['arrival_time'] = segment.find_element(By.CSS_SELECTOR, ".arrival-time").text
-                    segment_info['duration'] = segment.find_element(By.CSS_SELECTOR, ".flight-summary").text
-                    segment_info['route'] = segment.find_element(By.CSS_SELECTOR, ".destination-row").text
-                    segment_info['flight_number'] = segment.find_element(By.CSS_SELECTOR, ".operating-airline").text
-                    segment_info['cabin'] = segment.find_element(By.CSS_SELECTOR, ".mat-body-2").text
-                    segment_info['mixed_cabin_percentage'] = segment.find_element(By.CSS_SELECTOR, ".mixed-cabin-percentage").text if segment.find_elements(By.CSS_SELECTOR, ".mixed-cabin-percentage") else "N/A"
-                    segment_info['aircraft'] = segment.find_element(By.CSS_SELECTOR, ".operating-airline-icon").get_attribute("alt")
-                    segment_info['connection_time'] = segment.find_element(By.CSS_SELECTOR, ".connection-time").text if segment.find_elements(By.CSS_SELECTOR, ".connection-time") else "N/A"
-                    flight_info['segments'].append(segment_info)
-                    print(f"Segment {segment_index+1}/{len(segments)} extracted: {segment_info}")
-                except Exception as e:
-                    print(f"Error extracting segment info: {e}")
+        print(f"Extracted flight details: {flight_details_list}")
 
-            # Extract total flight duration and cost
-            try:
-                flight_info['total_duration'] = container.find_element(By.CSS_SELECTOR, ".flight-summary").text
-                flight_info['total_cost'] = container.find_element(By.CSS_SELECTOR, ".price-container").text
-                print(f"Total flight info extracted: Duration: {flight_info['total_duration']}, Cost: {flight_info['total_cost']}")
-            except Exception as e:
-                print(f"Error extracting total flight info: {e}")
-
-            flight_details.append(flight_info)
-
-        print(f"Extracted flight details: {flight_details}")
-
-        return flight_details
+        return flight_details_list
     except Exception as e:
         print(f"An error occurred: {e}")
         return "Error"
     finally:
         driver.quit()
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/search', methods=['POST'])
+def search():
+    origin = request.form['origin']
+    destination = request.form['destination']
+    date = request.form['date']
+    
+    results = search_flight_live(origin, destination, date)
+    
+    if results == "Error":
+        return jsonify({"error": "An error occurred while searching for flights."}), 500
+    
+    return jsonify(results)
 
 if __name__ == '__main__':
     app.run(debug=True)
