@@ -30,17 +30,16 @@ def extract_flight_details(cabin):
         # Parse the cabin using BeautifulSoup
         soup = BeautifulSoup(str(cabin), 'html.parser')
        
-        points_text = cabin.select_one('.points-total').text
+        points_text = soup.select_one('.points-total').text
         points_price = convert_points_price(points_text)
         
         # Extract the cash price and format it
-        cash_text = cabin.select_one('kilo-price').text
+        cash_text = soup.select_one('kilo-price').text
         cash_price = int(re.sub(r'[^\d]', '', cash_text))
-        # print(cash_price)
         
         # Extract the number of seats left and format it
-        seats_left_text = cabin.select_one('.seat-text').text if cabin.select_one('.seat-text') else "9+"
-        seats_left = re.search(r'\d+', seats_left_text).group() if seats_left_text else 0
+        seats_left_text = soup.select_one('.seat-text').text if soup.select_one('.seat-text') else "9+"
+        seats_left = int(re.search(r'\d+', seats_left_text).group()) if seats_left_text else 0
         
         # Extract the cabin type
         cabin_type_class = cabin.get('class', [])
@@ -49,30 +48,34 @@ def extract_flight_details(cabin):
         cabin_type = cabin_type_map.get(cabin_type_str.split('-')[0], -1)
 
         try:
-            mixed_cabin_percentage = cabin.select_one('.mixed-cabin-percentage').text
-            if mixed_cabin_percentage is None:
-                mixed_cabin = 100
-            else:
-                mixed_cabin = int(re.search(r'\d+', mixed_cabin_percentage).group()) 
+            mixed_cabin_percentage = soup.select_one('.mixed-cabin-percentage').text
+            mixed_cabin = int(re.search(r'\d+', mixed_cabin_percentage).group()) if mixed_cabin_percentage else 100
         except Exception as e:
-            # print(f"Error extracting flight details: {e}")
             mixed_cabin = 100
-        # print(mixed_cabin)
 
         # Extract segment information
         segment_text = ' '.join(cabin.get('class', []))
         segment_matches = re.findall(r"SEG-(\w+)-(\w+)-(\d{4}-\d{2}-\d{2})-(\d{4})", segment_text)
         segments = []
+        airports = []
+        airlines = []
         for match in segment_matches:
             flight_number, route, segment_dep_date, segment_dep_time = match
+            departure, arrival = route[:3], route[3:]
             segment_info = {
                 'flight_number': flight_number,
-                'route': route,
+                'route': f"{departure}-{arrival}",
                 'segment_dep_date': segment_dep_date,
                 'segment_dep_time': segment_dep_time
             }
             segments.append(segment_info)
+            airports.extend([departure, arrival])
+            airlines.append(flight_number[:2])
         
+        # Remove duplicates
+        airports = list(set(airports))
+        airlines = list(set(airlines))
+
         # Save cabin details
         cabin_info = {
             'points_price': points_price,
@@ -80,7 +83,9 @@ def extract_flight_details(cabin):
             'seats_left': seats_left,
             'cabin_type': cabin_type,
             'segments': segments,
-            'mixed_cabin': mixed_cabin
+            'mixed_cabin': mixed_cabin,
+            'airports': airports,
+            'airlines': airlines
         }
 
     except Exception as e:
@@ -123,8 +128,7 @@ def search():
     date = request.form['date']
     
     results = search_flight_from_file()
-    # print("count = ")
-    # print(len(results))
+    
     if results == "Error":
         return jsonify({"error": "An error occurred while searching for flights."}), 500
     
