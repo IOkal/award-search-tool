@@ -22,7 +22,7 @@ def convert_points_price(points_text):
         points_price = int(points_text)
     return points_price
 
-def extract_flight_details(container):
+def extract_flight_details(cabin):
     # flight_details = {
     #     'segments': [],
     #     'connections': [],
@@ -33,12 +33,12 @@ def extract_flight_details(container):
     flight_details = []
 
     try:
-        # Ensure container is not None
-        if container is None:
-            raise ValueError("Container is None")
+        # Ensure cabin is not None
+        if cabin is None:
+            raise ValueError("Cabin is None")
 
-        # Parse the container using BeautifulSoup
-        soup = BeautifulSoup(str(container), 'html.parser')
+        # Parse the cabin using BeautifulSoup
+        soup = BeautifulSoup(str(cabin), 'html.parser')
         
         # Extract the flight description to find segments and connections
         # flight_description = soup.select_one(".cdk-visually-hidden").text
@@ -80,61 +80,61 @@ def extract_flight_details(container):
         # print(f"Arrival Time: {arrival_time}")
 
         # Find all instances of class "available-cabin"
-        available_cabins = soup.find_all(class_="available-cabin")
+        # available_cabins = soup.find_all(class_="available-cabin")
         # print("len(available_cabins)")
         # print(len(available_cabins))
         
-        for cabin in available_cabins:
-            # Extract the Points price and format it
-            points_text = cabin.select_one('.points-total').text
-            points_price = convert_points_price(points_text)
-            # print("points_price = ")
-            # print(points_price)
-            
-            # Extract the cash price and format it
-            cash_text = cabin.select_one('kilo-price').text
-            cash_price = int(re.sub(r'[^\d]', '', cash_text))
-            # print(cash_price)
-            
-            # Extract the number of seats left and format it
-            seats_left_text = cabin.select_one('.seat-text').text if cabin.select_one('.seat-text') else '0'
-            seats_left = int(re.search(r'\d+', seats_left_text).group()) if seats_left_text else 0
-            
-            # Extract the cabin type
-            cabin_type_class = cabin.get('class', [])
-            cabin_type_str = next((cls for cls in cabin_type_class if cls.startswith('business') or cls.startswith('eco') or cls.startswith('ecoPremium') or cls.startswith('first')), None)
-            cabin_type_map = {'eco': 0, 'ecoPremium': 1, 'business': 2, 'first': 3}
-            cabin_type = cabin_type_map.get(cabin_type_str.split('-')[0], -1)
-            
-            # Extract segment information
-            segment_text = ' '.join(cabin.get('class', []))
-            segment_matches = re.findall(r"SEG-(\w+)-(\w+)-(\d{4}-\d{2}-\d{2})-(\d{4})", segment_text)
-            segments = []
-            for match in segment_matches:
-                flight_number, route, segment_dep_date, segment_dep_time = match
-                segment_info = {
-                    'flight_number': flight_number,
-                    'route': route,
-                    'segment_dep_date': segment_dep_date,
-                    'segment_dep_time': segment_dep_time
-                }
-                segments.append(segment_info)
-            
-            # Save cabin details
-            cabin_info = {
-                'points_price': points_price,
-                'cash_price': cash_price,
-                'seats_left': seats_left,
-                'cabin_type': cabin_type,
-                'segments': segments
+        # for cabin in container:
+        # Extract the Points price and format it
+        points_text = cabin.select_one('.points-total').text
+        points_price = convert_points_price(points_text)
+        # print("points_price = ")
+        # print(points_price)
+        
+        # Extract the cash price and format it
+        cash_text = cabin.select_one('kilo-price').text
+        cash_price = int(re.sub(r'[^\d]', '', cash_text))
+        # print(cash_price)
+        
+        # Extract the number of seats left and format it
+        seats_left_text = cabin.select_one('.seat-text').text if cabin.select_one('.seat-text') else '0'
+        seats_left = int(re.search(r'\d+', seats_left_text).group()) if seats_left_text else 0
+        
+        # Extract the cabin type
+        cabin_type_class = cabin.get('class', [])
+        cabin_type_str = next((cls for cls in cabin_type_class if cls.startswith('business') or cls.startswith('eco') or cls.startswith('ecoPremium') or cls.startswith('first')), None)
+        cabin_type_map = {'eco': 0, 'ecoPremium': 1, 'business': 2, 'first': 3}
+        cabin_type = cabin_type_map.get(cabin_type_str.split('-')[0], -1)
+        
+        # Extract segment information
+        segment_text = ' '.join(cabin.get('class', []))
+        segment_matches = re.findall(r"SEG-(\w+)-(\w+)-(\d{4}-\d{2}-\d{2})-(\d{4})", segment_text)
+        segments = []
+        for match in segment_matches:
+            flight_number, route, segment_dep_date, segment_dep_time = match
+            segment_info = {
+                'flight_number': flight_number,
+                'route': route,
+                'segment_dep_date': segment_dep_date,
+                'segment_dep_time': segment_dep_time
             }
-            flight_details.append(cabin_info)
-            # print(f"Cabin Info: {cabin_info}")
+            segments.append(segment_info)
+        
+        # Save cabin details
+        cabin_info = {
+            'points_price': points_price,
+            'cash_price': cash_price,
+            'seats_left': seats_left,
+            'cabin_type': cabin_type,
+            'segments': segments
+        }
+        # flight_details.append(cabin_info)
+        # print(f"Cabin Info: {cabin_info}")
 
     except Exception as e:
         print(f"Error extracting flight details: {e}")
 
-    return flight_details
+    return cabin_info
 
 def search_flight_from_file():
     with open('ap-award-page.html', 'r', encoding='utf-8') as file:
@@ -146,11 +146,11 @@ def search_flight_from_file():
     flight_details_list = []
 
     # Locate the main container for flight details
-    flight_containers = soup.select("kilo-upsell-row-cont")
-    print(f"Found {len(flight_containers)} flight containers.")
+    available_cabins = soup.find_all(class_="available-cabin")
+    print(f"Found {len(available_cabins)} cabins.")
 
-    for index, container in enumerate(flight_containers):
-        print(f"Inspecting container {index+1}/{len(flight_containers)}")
+    for index, container in enumerate(available_cabins):
+        print(f"Inspecting container {index+1}/{len(available_cabins)}")
         flight_details = extract_flight_details(container)
         flight_details_list.append(flight_details)
         print(f"Flight details for container {index+1}: {flight_details}")
