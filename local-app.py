@@ -10,8 +10,6 @@ import re
 
 app = Flask(__name__)
 
-# from bs4 import BeautifulSoup
-
 def convert_points_price(points_text):
     if 'K' in points_text:
         if '.' in points_text:
@@ -23,15 +21,6 @@ def convert_points_price(points_text):
     return points_price
 
 def extract_flight_details(cabin):
-    # flight_details = {
-    #     'segments': [],
-    #     'connections': [],
-    #     'prices': {'eco': None, 'ecoPremium': None, 'business': None},
-    #     'mixed_cabin_percentages': {'eco': None, 'ecoPremium': None, 'business': None},
-    #     'available_cabins': []
-    # }
-    flight_details = []
-
     try:
         # Ensure cabin is not None
         if cabin is None:
@@ -39,57 +28,9 @@ def extract_flight_details(cabin):
 
         # Parse the cabin using BeautifulSoup
         soup = BeautifulSoup(str(cabin), 'html.parser')
-        
-        # Extract the flight description to find segments and connections
-        # flight_description = soup.select_one(".cdk-visually-hidden").text
-        # print(f"Flight description: {flight_description}")
-        
-        # Extract segments
-        # segment_matches = re.findall(r"SEG-(\w+)-(\w+)-(\d{4}-\d{2}-\d{2}-\d{4})", flight_description)
-        # print(f"Segment matches: {segment_matches}")
-        
-        # for match in segment_matches:
-        #     flight_number, route, flight_time = match
-        #     departure, arrival = route.split('-')
-        #     segment_info = {
-        #         'flight_number': flight_number,
-        #         'route': route,
-        #         'departure_time': flight_time,
-        #         'departure': departure,
-        #         'arrival': arrival
-        #     }
-        #     flight_details['segments'].append(segment_info)
-        
-        # Extract layover information
-        # layover_matches = re.findall(r"Layover of (\d+h\d+m) in (\w+)", flight_description)
-        # print(f"Layover matches: {layover_matches}")
-        
-        # for match in layover_matches:
-        #     layover_time, layover_airport = match
-        #     flight_details['connections'].append({
-        #         'layover_time': layover_time,
-        #         'layover_airport': layover_airport
-        #     })
-        
-        # Extract departure and arrival times
-        # departure_time = soup.select_one('span.mat-h3.time.departure-time').text
-        # arrival_time = soup.select_one('span.mat-h3.time.arrival-time').text
-        # flight_details['departure_time'] = departure_time
-        # flight_details['arrival_time'] = arrival_time
-        # print(f"Departure Time: {departure_time}")
-        # print(f"Arrival Time: {arrival_time}")
-
-        # Find all instances of class "available-cabin"
-        # available_cabins = soup.find_all(class_="available-cabin")
-        # print("len(available_cabins)")
-        # print(len(available_cabins))
-        
-        # for cabin in container:
-        # Extract the Points price and format it
+       
         points_text = cabin.select_one('.points-total').text
         points_price = convert_points_price(points_text)
-        # print("points_price = ")
-        # print(points_price)
         
         # Extract the cash price and format it
         cash_text = cabin.select_one('kilo-price').text
@@ -128,8 +69,6 @@ def extract_flight_details(cabin):
             'cabin_type': cabin_type,
             'segments': segments
         }
-        # flight_details.append(cabin_info)
-        # print(f"Cabin Info: {cabin_info}")
 
     except Exception as e:
         print(f"Error extracting flight details: {e}")
