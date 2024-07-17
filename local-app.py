@@ -10,16 +10,17 @@ import re
 
 app = Flask(__name__)
 
-from bs4 import BeautifulSoup
+# from bs4 import BeautifulSoup
 
 def extract_flight_details(container):
-    flight_details = {
-        'segments': [],
-        'connections': [],
-        'prices': {'eco': None, 'ecoPremium': None, 'business': None},
-        'mixed_cabin_percentages': {'eco': None, 'ecoPremium': None, 'business': None},
-        'available_cabins': []
-    }
+    # flight_details = {
+    #     'segments': [],
+    #     'connections': [],
+    #     'prices': {'eco': None, 'ecoPremium': None, 'business': None},
+    #     'mixed_cabin_percentages': {'eco': None, 'ecoPremium': None, 'business': None},
+    #     'available_cabins': []
+    # }
+    flight_details = []
 
     try:
         # Ensure container is not None
@@ -34,7 +35,7 @@ def extract_flight_details(container):
         # print(f"Flight description: {flight_description}")
         
         # Extract segments
-        # segment_matches = re.findall(r"*-SEG-(\w+)-(\w+)-(\d{4}-\d{2}-\d{2}-\d{4})", flight_description)
+        # segment_matches = re.findall(r"SEG-(\w+)-(\w+)-(\d{4}-\d{2}-\d{2}-\d{4})", flight_description)
         # print(f"Segment matches: {segment_matches}")
         
         # for match in segment_matches:
@@ -77,8 +78,8 @@ def extract_flight_details(container):
             # Extract the Points price and format it
             points_text = cabin.select_one('.points-total').text.replace('K', '000')
             points_price = int(float(points_text.replace('.', '')))
-            print("points_price = ")
-            print(points_price)
+            # print("points_price = ")
+            # print(points_price)
             
             # Extract the cash price and format it
             cash_text = cabin.select_one('kilo-price').text
@@ -101,7 +102,6 @@ def extract_flight_details(container):
             segments = []
             for match in segment_matches:
                 flight_number, route, segment_dep_date, segment_dep_time = match
-                departure, arrival = route.split('-')
                 segment_info = {
                     'flight_number': flight_number,
                     'route': route,
@@ -109,8 +109,7 @@ def extract_flight_details(container):
                     'segment_dep_time': segment_dep_time
                 }
                 segments.append(segment_info)
-            print("segments = []")
-            print(segments)
+            
             # Save cabin details
             cabin_info = {
                 'points_price': points_price,
@@ -119,14 +118,13 @@ def extract_flight_details(container):
                 'cabin_type': cabin_type,
                 'segments': segments
             }
-            flight_details['available_cabins'].append(cabin_info)
-            print(f"Cabin Info: {cabin_info}")
+            flight_details.append(cabin_info)
+            # print(f"Cabin Info: {cabin_info}")
 
     except Exception as e:
         print(f"Error extracting flight details: {e}")
 
     return flight_details
-
 
 def search_flight_from_file():
     with open('ap-award-page.html', 'r', encoding='utf-8') as file:
