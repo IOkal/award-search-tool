@@ -61,7 +61,9 @@ def extract_flight_details(cabin):
         airlines = []
         for match in segment_matches:
             flight_number, route, segment_dep_date, segment_dep_time = match
-            departure, arrival = route[:3], route[3:]
+            airline_code, flight_num = re.match(r"(\D+)(\d+)", flight_number).groups()
+            flight_number = f"{airline_code} {flight_num}"
+            departure, arrival = re.match(r"(\w{3})(\w{3})", route).groups()
             segment_info = {
                 'flight_number': flight_number,
                 'route': f"{departure}-{arrival}",
@@ -70,7 +72,7 @@ def extract_flight_details(cabin):
             }
             segments.append(segment_info)
             airports.extend([departure, arrival])
-            airlines.append(flight_number[:2])
+            airlines.append(airline_code)
         
         # Remove duplicates
         airports = list(set(airports))
