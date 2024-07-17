@@ -36,6 +36,31 @@
         <input type="checkbox" id="filter-first" name="cabin" value="First" checked> First
     </div>
 
+    <div class="mt-3">
+        <label for="min-cabin-percentage">Minimum Cabin Percentage:</label><br>
+        <input type="number" id="min-cabin-percentage" name="min-cabin-percentage" class="form-control" value="0" min="0" max="100">
+    </div>
+
+    <div class="mt-3">
+        <label for="must-have-airports">Must Have Airports (comma-separated codes):</label><br>
+        <input type="text" id="must-have-airports" name="must-have-airports" class="form-control">
+    </div>
+
+    <div class="mt-3">
+        <label for="must-not-have-airports">Must NOT Have Airports (comma-separated codes):</label><br>
+        <input type="text" id="must-not-have-airports" name="must-not-have-airports" class="form-control">
+    </div>
+
+    <div class="mt-3">
+        <label for="must-have-airlines">Must Have Airlines (comma-separated codes):</label><br>
+        <input type="text" id="must-have-airlines" name="must-have-airlines" class="form-control">
+    </div>
+
+    <div class="mt-3">
+        <label for="must-not-have-airlines">Must NOT Have Airlines (comma-separated codes):</label><br>
+        <input type="text" id="must-not-have-airlines" name="must-not-have-airlines" class="form-control">
+    </div>
+
     <div class="mt-5">
         <table id="results-table" class="display" style="width:100%">
             <thead>
@@ -71,10 +96,12 @@
                         let routes = flight.segments.map(segment => `${segment.route}`).join('<br>');
                         let flights = flight.segments.map(segment => `${segment.flight_number}`).join('<br>');
                         let cabinType = ['Economy', 'Premium Economy', 'Business', 'First'][flight.cabin_type];
-                        let mixedCabin = flight.mixed_cabin + '%'; //? flight.mixed_cabin_percentages[cabinType.toLowerCase().replace(' ', '')] : '';
+                        let mixedCabin = flight.mixed_cabin + '%';
                         let pointsPrice = flight.points_price;
                         let cashPrice = flight.cash_price;
                         let combinedPrice = pointsPrice + '<br>$' + cashPrice;
+                        let airports = flight.airports.join(', ');
+                        let airlines = flight.airlines.join(', ');
 
                         let row = [
                             departureTimes,
@@ -83,9 +110,9 @@
                             cabinType,
                             mixedCabin,
                             flight.seats_left,
-                            combinedPrice
-                            // pointsPrice,
-                            // cashPrice
+                            combinedPrice,
+                            airports,
+                            airlines
                         ];
                         table.row.add(row).draw();
                     });
@@ -97,7 +124,7 @@
             });
         });
 
-        $('input[name="cabin"]').on('change', function() {
+        $('input[name="cabin"], #min-cabin-percentage, #must-have-airports, #must-not-have-airports, #must-have-airlines, #must-not-have-airlines').on('change', function() {
             applyFilters();
         });
 
@@ -105,11 +132,50 @@
             var selectedCabins = $('input[name="cabin"]:checked').map(function() {
                 return this.value;
             }).get();
+            var minCabinPercentage = parseInt($('#min-cabin-percentage').val()) || 0;
+            var mustHaveAirports = $('#must-have-airports').val().split(',').map(code => code.trim().toUpperCase()).filter(code => code);
+            var mustNotHaveAirports = $('#must-not-have-airports').val().split(',').map(code => code.trim().toUpperCase()).filter(code => code);
+            var mustHaveAirlines = $('#must-have-airlines').val().split(',').map(code => code.trim().toUpperCase()).filter(code => code);
+            var mustNotHaveAirlines = $('#must-not-have-airlines').val().split(',').map(code => code.trim().toUpperCase()).filter(code => code);
 
             table.rows().every(function() {
                 var row = this.node();
                 var cabinType = this.data()[3];
-                if (selectedCabins.includes(cabinType)) {
+                var mixedCabin = this.data()[4];
+                var mixedCabinPercentage = parseInt(mixedCabin) || 0;
+                var routeAirports = this.data()[7].split(', ');
+                var flightAirlines = this.data()[8].split(', ');
+                var showRow = true;
+
+                if (!selectedCabins.includes(cabinType) || mixedCabinPercentage < minCabinPercentage) {
+                    showRow = false;
+                }
+
+                if (mustHaveAirports.length > 0) {
+                    if (!mustHaveAirports.some(airport => routeAirports.includes(airport))) {
+                        showRow = false;
+                    }
+                }
+
+                if (mustNotHaveAirports.length > 0) {
+                    if (mustNotHaveAirports.some(airport => routeAirports.includes(airport))) {
+                        showRow = false;
+                    }
+                }
+
+                if (mustHaveAirlines.length > 0) {
+                    if (!mustHaveAirlines.some(airline => flightAirlines.includes(airline))) {
+                        showRow = false;
+                    }
+                }
+
+                if (mustNotHaveAirlines.length > 0) {
+                    if (mustNotHaveAirlines.some(airline => flightAirlines.includes(airline))) {
+                        showRow = false;
+                    }
+                }
+
+                if (showRow) {
                     $(row).show();
                 } else {
                     $(row).hide();
