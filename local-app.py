@@ -21,6 +21,7 @@ def convert_points_price(points_text):
     return points_price
 
 def extract_flight_details(cabin):
+    cabin_info = {}
     try:
         # Ensure cabin is not None
         if cabin is None:
@@ -38,15 +39,26 @@ def extract_flight_details(cabin):
         # print(cash_price)
         
         # Extract the number of seats left and format it
-        seats_left_text = cabin.select_one('.seat-text').text if cabin.select_one('.seat-text') else '0'
-        seats_left = int(re.search(r'\d+', seats_left_text).group()) if seats_left_text else 0
+        seats_left_text = cabin.select_one('.seat-text').text if cabin.select_one('.seat-text') else "9+"
+        seats_left = re.search(r'\d+', seats_left_text).group() if seats_left_text else 0
         
         # Extract the cabin type
         cabin_type_class = cabin.get('class', [])
         cabin_type_str = next((cls for cls in cabin_type_class if cls.startswith('business') or cls.startswith('eco') or cls.startswith('ecoPremium') or cls.startswith('first')), None)
         cabin_type_map = {'eco': 0, 'ecoPremium': 1, 'business': 2, 'first': 3}
         cabin_type = cabin_type_map.get(cabin_type_str.split('-')[0], -1)
-        
+
+        try:
+            mixed_cabin_percentage = cabin.select_one('.mixed-cabin-percentage').text
+            if mixed_cabin_percentage is None:
+                mixed_cabin = 100
+            else:
+                mixed_cabin = int(re.search(r'\d+', mixed_cabin_percentage).group()) 
+        except Exception as e:
+            # print(f"Error extracting flight details: {e}")
+            mixed_cabin = 100
+        # print(mixed_cabin)
+
         # Extract segment information
         segment_text = ' '.join(cabin.get('class', []))
         segment_matches = re.findall(r"SEG-(\w+)-(\w+)-(\d{4}-\d{2}-\d{2})-(\d{4})", segment_text)
@@ -67,7 +79,8 @@ def extract_flight_details(cabin):
             'cash_price': cash_price,
             'seats_left': seats_left,
             'cabin_type': cabin_type,
-            'segments': segments
+            'segments': segments,
+            'mixed_cabin': mixed_cabin
         }
 
     except Exception as e:
