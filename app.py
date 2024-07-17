@@ -5,6 +5,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
+from bs4 import BeautifulSoup
 import re
 
 app = Flask(__name__)
@@ -18,14 +19,28 @@ def extract_flight_details(container):
     }
 
     try:
+        # Ensure container is not None
+        if container is None:
+            raise ValueError("Container is None")
+
+        # Parse the container using BeautifulSoup
+        soup = BeautifulSoup(str(container), 'html.parser')
+        
         # Extract the flight description to find segments and connections
-        flight_description = container.find_element(By.CSS_SELECTOR, ".cdk-visually-hidden").text
-        print(f"Flight description: {flight_description}")
+        # flight_description = soup.select_one(".cdk-visually-hidden").text
+        # print(f"Flight description: {flight_description}")
         
-        # Extract segments
-        segment_matches = re.findall(r"SEG-(\w+)-(\w+)-(\d{4}-\d{2}-\d{2}-\d{4})", flight_description)
-        print(f"Segment matches: {segment_matches}")
-        
+        # # Extract segments
+        # segment_matches = re.findall(r"SEG-(\w+)-(\w+)-(\d{4}-\d{2}-\d{2}-\d{4})", flight_description)
+        # print(f"Segment matches: {segment_matches}")
+
+        # Find all instances of class "available-cabin"
+        available_cabins = soup.find_all(class_="available-cabin")
+        # print("available_cabins")
+        # print(available_cabins)
+        # print(available_cabins[0])
+        # for cabin in available_cabins:
+
         for match in segment_matches:
             flight_number, route, flight_time = match
             departure, arrival = route.split('-')
@@ -49,17 +64,28 @@ def extract_flight_details(container):
                 'layover_airport': layover_airport
             })
         
+        # Extract departure and arrival times
+        departure_time = soup.select_one('span.mat-h3.time.departure-time').text
+        arrival_time = soup.select_one('span.mat-h3.time.arrival-time').text
+        flight_details['departure_time'] = departure_time
+        flight_details['arrival_time'] = arrival_time
+        print(f"Departure Time: {departure_time}")
+        print(f"Arrival Time: {arrival_time}")
+
         # Extract price and mixed cabin information
         cabin_classes = ['eco', 'ecoPremium', 'business']
         for cabin in cabin_classes:
             try:
-                cabin_container = container.find_element(By.CSS_SELECTOR, f".available-cabin.flight-cabin-cell.{cabin}")
-                price_points = cabin_container.find_element(By.CSS_SELECTOR, ".points-total").text
-                price_cash = cabin_container.find_element(By.CSS_SELECTOR, "kilo-price").text
-                mixed_cabin_percentage = cabin_container.find_element(By.CSS_SELECTOR, ".mixed-cabin-percentage").text if cabin_container.find_elements(By.CSS_SELECTOR, ".mixed-cabin-percentage") else "100%"
+                cabin_container = soup.select_one(f".available-cabin.flight-cabin-cell.{cabin}")
+                if cabin_container:
+                    price_points = cabin_container.select_one(".points-total").text
+                    price_cash = cabin_container.select_one("kilo-price").text
+                    mixed_cabin_percentage = cabin_container.select_one(".mixed-cabin-percentage").text if cabin_container.select_one(".mixed-cabin-percentage") else "100%"
                 
-                flight_details['prices'][cabin] = f"{price_points} + {price_cash}"
-                flight_details['mixed_cabin_percentages'][cabin] = mixed_cabin_percentage
+                    flight_details['prices'][cabin] = f"{price_points} + {price_cash}"
+                    flight_details['mixed_cabin_percentages'][cabin] = mixed_cabin_percentage
+                else:
+                    print(f"{cabin.capitalize()} class container not found.")
             except Exception as e:
                 print(f"{cabin.capitalize()} class not available: {e}")
 
