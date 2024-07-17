@@ -8,6 +8,11 @@
     <link rel="stylesheet" href="https://cdn.datatables.net/1.10.21/css/jquery.dataTables.min.css">
     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
     <script src="https://cdn.datatables.net/1.10.21/js/jquery.dataTables.min.js"></script>
+    <style>
+        .monospace {
+            font-family: 'Courier New', Courier, monospace;
+        }
+    </style>
 </head>
 <body>
 <div class="container">
@@ -41,28 +46,40 @@
         <input type="number" id="min-cabin-percentage" name="min-cabin-percentage" class="form-control" value="0" min="0" max="100">
     </div>
 
-    <div class="mt-3">
-        <label for="must-have-airports">Must Have Airports (comma-separated codes):</label><br>
-        <input type="text" id="must-have-airports" name="must-have-airports" class="form-control">
-    </div>
+    <!-- <div class="mt-3">
+        <label for="min-points-price">Minimum Points Price:</label><br>
+        <input type="number" id="min-points-price" name="min-points-price" class="form-control" value="0" min="0">
+    </div> -->
 
     <div class="mt-3">
-        <label for="must-not-have-airports">Must NOT Have Airports (comma-separated codes):</label><br>
-        <input type="text" id="must-not-have-airports" name="must-not-have-airports" class="form-control">
+        <label for="max-points-price">Maximum Points Price:</label><br>
+        <input type="number" id="max-points-price" name="max-points-price" class="form-control" value="1000000" min="0">
     </div>
 
-    <div class="mt-3">
-        <label for="must-have-airlines">Must Have Airlines (comma-separated codes):</label><br>
-        <input type="text" id="must-have-airlines" name="must-have-airlines" class="form-control">
+    <div class="mt-3 row">
+        <div class="col">
+            <label for="must-have-airports">🏟️ Airports to include:</label>
+            <input type="text" id="must-have-airports" name="must-have-airports" class="form-control">
+        </div>
+        <div class="col">
+            <label for="must-have-airlines">✈️ Airlines to include:</label>
+            <input type="text" id="must-have-airlines" name="must-have-airlines" class="form-control">
+        </div>
     </div>
 
-    <div class="mt-3">
-        <label for="must-not-have-airlines">Must NOT Have Airlines (comma-separated codes):</label><br>
-        <input type="text" id="must-not-have-airlines" name="must-not-have-airlines" class="form-control">
+    <div class="mt-3 row">
+        <div class="col">
+            <label for="must-not-have-airports">🏟️ Airports to exclude:</label>
+            <input type="text" id="must-not-have-airports" name="must-not-have-airports" class="form-control">
+        </div>
+        <div class="col">
+            <label for="must-not-have-airlines">✈️ Airlines to exclude:</label>
+            <input type="text" id="must-not-have-airlines" name="must-not-have-airlines" class="form-control">
+        </div>
     </div>
 
     <div class="mt-5">
-        <table id="results-table" class="display" style="width:100%">
+        <table id="results-table" class="display monospace" style="width:100%">
             <thead>
                 <tr>
                     <th>Departure Time</th>
@@ -93,7 +110,7 @@
                     table.clear().draw();
                     data.forEach(function(flight) {
                         let departureTimes = flight.segments.map(segment => `${segment.segment_dep_date} ${segment.segment_dep_time}`).join('<br>');
-                        let routes = flight.segments.map(segment => `${segment.route}`).join('<br>');
+                        let routes = flight.segments.map(segment => segment.route.replace(/([A-Z]{3})([A-Z]{3})/g, '$1-$2')).join('<br>');
                         let flights = flight.segments.map(segment => `${segment.flight_number}`).join('<br>');
                         let cabinType = ['Economy', 'Premium Economy', 'Business', 'First'][flight.cabin_type];
                         let mixedCabin = flight.mixed_cabin + '%';
@@ -124,7 +141,7 @@
             });
         });
 
-        $('input[name="cabin"], #min-cabin-percentage, #must-have-airports, #must-not-have-airports, #must-have-airlines, #must-not-have-airlines').on('change', function() {
+        $('input[name="cabin"], #min-cabin-percentage, #min-points-price, #max-points-price, #must-have-airports, #must-not-have-airports, #must-have-airlines, #must-not-have-airlines').on('change', function() {
             applyFilters();
         });
 
@@ -133,6 +150,8 @@
                 return this.value;
             }).get();
             var minCabinPercentage = parseInt($('#min-cabin-percentage').val()) || 0;
+            var minPointsPrice = parseInt($('#min-points-price').val()) || 0;
+            var maxPointsPrice = parseInt($('#max-points-price').val()) || 1000000;
             var mustHaveAirports = $('#must-have-airports').val().split(',').map(code => code.trim().toUpperCase()).filter(code => code);
             var mustNotHaveAirports = $('#must-not-have-airports').val().split(',').map(code => code.trim().toUpperCase()).filter(code => code);
             var mustHaveAirlines = $('#must-have-airlines').val().split(',').map(code => code.trim().toUpperCase()).filter(code => code);
@@ -143,11 +162,12 @@
                 var cabinType = this.data()[3];
                 var mixedCabin = this.data()[4];
                 var mixedCabinPercentage = parseInt(mixedCabin) || 0;
+                var pointsPrice = parseInt(this.data()[6].split('<br>')[0]) || 0;
                 var routeAirports = this.data()[7].split(', ');
                 var flightAirlines = this.data()[8].split(', ');
                 var showRow = true;
 
-                if (!selectedCabins.includes(cabinType) || mixedCabinPercentage < minCabinPercentage) {
+                if (!selectedCabins.includes(cabinType) || mixedCabinPercentage < minCabinPercentage || pointsPrice < minPointsPrice || pointsPrice > maxPointsPrice) {
                     showRow = false;
                 }
 
