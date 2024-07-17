@@ -12,6 +12,16 @@ app = Flask(__name__)
 
 # from bs4 import BeautifulSoup
 
+def convert_points_price(points_text):
+    if 'K' in points_text:
+        if '.' in points_text:
+            points_price = int(float(points_text.replace('K', '')) * 1000)
+        else:
+            points_price = int(points_text.replace('K', '000'))
+    else:
+        points_price = int(points_text)
+    return points_price
+
 def extract_flight_details(container):
     # flight_details = {
     #     'segments': [],
@@ -76,8 +86,8 @@ def extract_flight_details(container):
         
         for cabin in available_cabins:
             # Extract the Points price and format it
-            points_text = cabin.select_one('.points-total').text.replace('K', '000')
-            points_price = int(float(points_text.replace('.', '')))
+            points_text = cabin.select_one('.points-total').text
+            points_price = convert_points_price(points_text)
             # print("points_price = ")
             # print(points_price)
             
@@ -161,7 +171,8 @@ def search():
     date = request.form['date']
     
     results = search_flight_from_file()
-    
+    # print("count = ")
+    # print(len(results))
     if results == "Error":
         return jsonify({"error": "An error occurred while searching for flights."}), 500
     
