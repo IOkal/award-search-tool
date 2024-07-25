@@ -1,176 +1,110 @@
-from flask import Flask, render_template, request, jsonify
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from webdriver_manager.chrome import ChromeDriverManager
-from bs4 import BeautifulSoup
-import re
+    from flask import Flask, render_template, request, jsonify
+    import requests
+    import json
+    import time
 
-app = Flask(__name__)
+    app = Flask(__name__)
 
-def extract_flight_details(container):
-    flight_details = {
-        'segments': [],
-        'connections': [],
-        'prices': {'eco': None, 'ecoPremium': None, 'business': None},
-        'mixed_cabin_percentages': {'eco': None, 'ecoPremium': None, 'business': None}
-    }
+    MAX_CONCURRENT_REQUESTS = 10
 
-    try:
-        # Ensure container is not None
-        if container is None:
-            raise ValueError("Container is None")
+    def generate_date_range(start_date, end_date):
+        from datetime import datetime, timedelta
 
-        # Parse the container using BeautifulSoup
-        soup = BeautifulSoup(str(container), 'html.parser')
-        
-        # Extract the flight description to find segments and connections
-        # flight_description = soup.select_one(".cdk-visually-hidden").text
-        # print(f"Flight description: {flight_description}")
-        
-        # # Extract segments
-        # segment_matches = re.findall(r"SEG-(\w+)-(\w+)-(\d{4}-\d{2}-\d{2}-\d{4})", flight_description)
-        # print(f"Segment matches: {segment_matches}")
+        start = datetime.strptime(start_date, "%Y-%m-%d")
+        end = datetime.strptime(end_date, "%Y-%m-%d")
+        delta = end - start
 
-        # Find all instances of class "available-cabin"
-        available_cabins = soup.find_all(class_="available-cabin")
-        # print("available_cabins")
-        # print(available_cabins)
-        # print(available_cabins[0])
-        # for cabin in available_cabins:
+        return [(start + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(delta.days + 1)]
 
-        for match in segment_matches:
-            flight_number, route, flight_time = match
-            departure, arrival = route.split('-')
-            segment_info = {
-                'flight_number': flight_number,
-                'route': route,
-                'departure_time': flight_time,
-                'departure': departure,
-                'arrival': arrival
-            }
-            flight_details['segments'].append(segment_info)
-        
-        # Extract layover information
-        layover_matches = re.findall(r"Layover of (\d+h\d+m) in (\w+)", flight_description)
-        print(f"Layover matches: {layover_matches}")
-        
-        for match in layover_matches:
-            layover_time, layover_airport = match
-            flight_details['connections'].append({
-                'layover_time': layover_time,
-                'layover_airport': layover_airport
-            })
-        
-        # Extract departure and arrival times
-        departure_time = soup.select_one('span.mat-h3.time.departure-time').text
-        arrival_time = soup.select_one('span.mat-h3.time.arrival-time').text
-        flight_details['departure_time'] = departure_time
-        flight_details['arrival_time'] = arrival_time
-        print(f"Departure Time: {departure_time}")
-        print(f"Arrival Time: {arrival_time}")
+    @app.route('/')
+    def index():
+        print("Rendering index.html")
+        return render_template('index.html')
 
-        # Extract price and mixed cabin information
-        cabin_classes = ['eco', 'ecoPremium', 'business']
-        for cabin in cabin_classes:
-            try:
-                cabin_container = soup.select_one(f".available-cabin.flight-cabin-cell.{cabin}")
-                if cabin_container:
-                    price_points = cabin_container.select_one(".points-total").text
-                    price_cash = cabin_container.select_one("kilo-price").text
-                    mixed_cabin_percentage = cabin_container.select_one(".mixed-cabin-percentage").text if cabin_container.select_one(".mixed-cabin-percentage") else "100%"
-                
-                    flight_details['prices'][cabin] = f"{price_points} + {price_cash}"
-                    flight_details['mixed_cabin_percentages'][cabin] = mixed_cabin_percentage
+    @app.route('/search', methods=['POST'])
+    def search():
+        print("Search initiated")
+        data = request.get_json()
+        print(f"Received data: {data}")
+
+        origins = data.get('origin').split(',')
+        destinations = data.get('destination').split(',')
+        dates = data.get('date')
+
+        if ':' in dates:
+            date_range = generate_date_range(*dates.split(':'))
+        else:
+            date_range = dates.split(',')
+
+        permutations = [(origin.strip(), destination.strip(), date.strip()) for origin in origins for destination in destinations for date in date_range]
+        print(f"Total permutations to process: {len(permutations)}")
+
+        results = []
+        failed_searches = []
+        success_searches = 0
+
+        batch_start_index = 0
+
+        def process_batch(batch):
+            nonlocal results, success_searches, failed_searches
+
+            for origin, destination, date in batch:
+                print(f"Processing: {origin} to {destination} on {date}")
+                try:
+                    response = requests.post(API_GATEWAY_ENDPOINT, json={"Origin": origin, "Destination": destination, "Date": date})
+                    print(f"Response status code: {response.status_code}")
+                    print(f"Response text: {response.text}")
+
+                    if response.status_code == 200:
+                        request_id = response.json().get('request_id')
+                        print(f"Request ID: {request_id}")
+                        if request_id:
+                            # Poll for the result
+                            result = poll_for_result(request_id)
+                            if result:
+                                results.extend(result if isinstance(result, list) else [result])
+                                success_searches += 1
+                            else:
+                                failed_searches.append(f"{origin} to {destination} on {date}")
+                        else:
+                            failed_searches.append(f"{origin} to {destination} on {date}: No request_id in response")
+                    else:
+                        failed_searches.append(f"{origin} to {destination} on {date}: {response.status_code} - {response.text}")
+                except Exception as e:
+                    print(f"Failed to search {origin} to {destination} on {date}: {str(e)}")
+                    failed_searches.append(f"{origin} to {destination} on {date}: {str(e)}")
+
+        def poll_for_result(request_id):
+            print(f"Polling for result with request ID: {request_id}")
+            poll_url = f"{API_GATEWAY_ENDPOINT}/{request_id}/status"
+            while True:
+                time.sleep(5)  # wait for 5 seconds before polling again
+                response = requests.get(poll_url)
+                print(f"Poll response status code: {response.status_code}")
+                print(f"Poll response text: {response.text}")
+
+                if response.status_code == 200:
+                    response_data = response.json()
+                    print(f"Poll response data: {response_data}")
+                    if response_data['status'] == 'completed':
+                        return response_data['result']
+                    elif response_data['status'] == 'failed':
+                        return None
                 else:
-                    print(f"{cabin.capitalize()} class container not found.")
-            except Exception as e:
-                print(f"{cabin.capitalize()} class not available: {e}")
+                    print(f"Polling failed with status code: {response.status_code}")
+                    return None
 
-    except Exception as e:
-        print(f"Error extracting flight details: {e}")
+        while batch_start_index < len(permutations):
+            batch = permutations[batch_start_index:batch_start_index + MAX_CONCURRENT_REQUESTS]
+            print(f"Processing batch {batch_start_index // MAX_CONCURRENT_REQUESTS + 1}")
+            process_batch(batch)
+            batch_start_index += MAX_CONCURRENT_REQUESTS
 
-    return flight_details
+        print(f"Successful searches: {success_searches}")
+        print(f"Failed searches: {failed_searches}")
 
-def search_flight_live(origin, destination, date):
-    url = f"https://www.aircanada.com/aeroplan/redeem/availability/outbound?org0={origin}&dest0={destination}&departureDate0={date}&ADT=1&YTH=0&CHD=0&INF=0&INS=0&lang=en-CA&tripType=O&marketCode=INT"
-    
-    options = webdriver.ChromeOptions()
-    options.add_argument('--disable-gpu')
-    options.add_argument('--no-sandbox')
-    options.add_argument('--disable-dev-shm-usage')
-    # options.add_argument('--ignore-certificate-errors')
-    # options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
-    options.add_argument("window-size=1920,1080")
-    options.add_argument("start-maximized")
-    options.add_argument("--disable-setuid-sandbox")
-    options.add_argument("--disable-blink-features=AutomationControlled")
-    options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    options.add_experimental_option('useAutomationExtension', False)
-    
-    service = Service(ChromeDriverManager().install())
-    driver = webdriver.Chrome(service=service, options=options)
-    
-    try:
-        driver.get(url)
-        print(f"Searching: {origin} to {destination} on {date}")
-        
-        # Wait for the loading spinner to disappear
-        print("Waiting for loading spinner to disappear...")
-        WebDriverWait(driver, 60).until(
-            EC.invisibility_of_element((By.CSS_SELECTOR, "kilo-loading-spinner-pres"))
-        )
-        print("Loading spinner disappeared.")
+        return jsonify({"success_searches": success_searches, "failed_searches": failed_searches, "results": results})
 
-        # Wait for the flights count element to be present
-        print("Waiting for flights count element to be present...")
-        flights_count_element = WebDriverWait(driver, 30).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, "span.flights-count"))
-        )
-        flights_count = flights_count_element.text
-        print(f"Flights count text: {flights_count}")
-
-        # Extract flight details
-        print("Extracting flight details...")
-        flight_details_list = []
-
-        # Locate the main container for flight details
-        flight_containers = driver.find_elements(By.CSS_SELECTOR, "kilo-upsell-row-cont")
-        print(f"Found {len(flight_containers)} flight containers.")
-
-        for index, container in enumerate(flight_containers):
-            print(f"Inspecting container {index+1}/{len(flight_containers)}")
-            flight_details = extract_flight_details(container)
-            flight_details_list.append(flight_details)
-            print(f"Flight details for container {index+1}: {flight_details}")
-
-        print(f"Extracted flight details: {flight_details_list}")
-
-        return flight_details_list
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        return "Error"
-    finally:
-        driver.quit()
-
-@app.route('/')
-def index():
-    return render_template('index.html')
-
-@app.route('/search', methods=['POST'])
-def search():
-    origin = request.form['origin']
-    destination = request.form['destination']
-    date = request.form['date']
-    
-    results = search_flight_live(origin, destination, date)
-    
-    if results == "Error":
-        return jsonify({"error": "An error occurred while searching for flights."}), 500
-    
-    return jsonify(results)
-
-if __name__ == '__main__':
-    app.run(debug=True)
+    if __name__ == '__main__':
+        print("Starting Flask app")
+        app.run(debug=True)
