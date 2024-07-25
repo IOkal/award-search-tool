@@ -28,7 +28,7 @@
         </div>
         <div class="form-group">
             <label for="date">Date</label>
-            <input type="date" class="form-control" id="date" name="date" required>
+            <input type="text" class="form-control" id="date" name="date" placeholder="YYYY-MM-DD or YYYY-MM-DD:YYYY-MM-DD" required>
         </div>
         <button type="submit" class="btn btn-primary">Search</button>
     </form>
@@ -45,11 +45,6 @@
         <label for="min-cabin-percentage">Minimum Cabin Percentage:</label><br>
         <input type="number" id="min-cabin-percentage" name="min-cabin-percentage" class="form-control" value="0" min="0" max="100">
     </div>
-
-    <!-- <div class="mt-3">
-        <label for="min-points-price">Minimum Points Price:</label><br>
-        <input type="number" id="min-points-price" name="min-points-price" class="form-control" value="0" min="0">
-    </div> -->
 
     <div class="mt-3">
         <label for="max-points-price">Maximum Points Price:</label><br>
@@ -102,13 +97,22 @@
 
         $('#search-form').on('submit', function(e) {
             e.preventDefault();
+            console.log("Search form submitted");
+            var requestData = {
+                origin: $('#origin').val(),
+                destination: $('#destination').val(),
+                date: $('#date').val()
+            };
+            console.log("Request data: ", requestData);
             $.ajax({
                 url: '/search',
                 type: 'POST',
-                data: $('#search-form').serialize(),
+                contentType: 'application/json',
+                data: JSON.stringify(requestData),
                 success: function(data) {
+                    console.log("Data received: ", data);
                     table.clear().draw();
-                    data.forEach(function(flight) {
+                    data.results.forEach(function(flight) {
                         let departureTimes = flight.segments.map(segment => `${segment.segment_dep_date} ${segment.segment_dep_time}`).join('<br>');
                         let routes = flight.segments.map(segment => segment.route.replace(/([A-Z]{3})([A-Z]{3})/g, '$1-$2')).join('<br>');
                         let flights = flight.segments.map(segment => `${segment.flight_number}`).join('<br>');
@@ -135,13 +139,14 @@
                     });
                     applyFilters();
                 },
-                error: function() {
+                error: function(jqXHR, textStatus, errorThrown) {
+                    console.log("Error occurred: ", textStatus, errorThrown);
                     alert('An error occurred while searching for flights.');
                 }
             });
         });
 
-        $('input[name="cabin"], #min-cabin-percentage, #min-points-price, #max-points-price, #must-have-airports, #must-not-have-airports, #must-have-airlines, #must-not-have-airlines').on('change', function() {
+        $('input[name="cabin"], #min-cabin-percentage, #max-points-price, #must-have-airports, #must-not-have-airports, #must-have-airlines, #must-not-have-airlines').on('change', function() {
             applyFilters();
         });
 
@@ -150,7 +155,6 @@
                 return this.value;
             }).get();
             var minCabinPercentage = parseInt($('#min-cabin-percentage').val()) || 0;
-            var minPointsPrice = parseInt($('#min-points-price').val()) || 0;
             var maxPointsPrice = parseInt($('#max-points-price').val()) || 1000000;
             var mustHaveAirports = $('#must-have-airports').val().split(',').map(code => code.trim().toUpperCase()).filter(code => code);
             var mustNotHaveAirports = $('#must-not-have-airports').val().split(',').map(code => code.trim().toUpperCase()).filter(code => code);
@@ -167,7 +171,7 @@
                 var flightAirlines = this.data()[8].split(', ');
                 var showRow = true;
 
-                if (!selectedCabins.includes(cabinType) || mixedCabinPercentage < minCabinPercentage || pointsPrice < minPointsPrice || pointsPrice > maxPointsPrice) {
+                if (!selectedCabins.includes(cabinType) || mixedCabinPercentage < minCabinPercentage || pointsPrice > maxPointsPrice) {
                     showRow = false;
                 }
 
