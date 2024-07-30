@@ -10,8 +10,11 @@ from selenium.webdriver.support import expected_conditions as EC
 from bs4 import BeautifulSoup
 from botocore.exceptions import NoCredentialsError, PartialCredentialsError
 import requests
+import os
 
 s3_client = boto3.client('s3')
+dynamodb = boto3.resource('dynamodb')
+table = dynamodb.Table(os.environ['DYNAMODB_TABLE_NAME'])
 
 def write_to_log(log_message, bucket, log_file):
     log_message = f"{time.strftime('%Y-%m-%d %H:%M:%S')} - {log_message}\n"
@@ -125,12 +128,12 @@ def search_flight_live(origin, destination, date, log_file):
     url = f"https://www.aircanada.com/aeroplan/redeem/availability/outbound?org0={origin}&dest0={destination}&departureDate0={date}&ADT=1&YTH=0&CHD=0&INF=0&INS=0&lang=en-CA&tripType=O&marketCode=INT"
 
     payload = {
-       'api_key': '',
-       'country_code': '',
-       'url': ''
+       'api_key': os.environ['SCRAPER_API_KEY'],
+       'country_code': 'ca',
+       'url': 'https://aircanada.com'
     }
 
-    response = requests.get('', params=payload)
+    response = requests.get(os.environ['SCRAPER_API_URL'], params=payload)
     write_to_log(response.text, 'output-bucket-885053922788', log_file)
 
     chrome_options = webdriver.ChromeOptions()
@@ -208,35 +211,63 @@ def search_flight_live(origin, destination, date, log_file):
     finally:
         driver.quit()
 
-def lambda_handler(event, context):
-    events = event.get('body').get('Origin')
+def process_event(event):
     origin = event.get('Origin')
     destination = event.get('Destination')
     date = event.get('Date')
+    request_id = event.get('request_id')
 
     log_file = f"{origin}_{destination}_{date}_log.txt"
     write_to_log(event, 'output-bucket-885053922788', log_file)
     write_to_log("/n", 'output-bucket-885053922788', log_file)
-    write_to_log(events, 'output-bucket-885053922788', log_file)
 
     if not origin or not destination or not date:
         write_to_log("Missing parameters", 'output-bucket-885053922788', log_file)
-        return {
-            'statusCode': 400,
-            'body': json.dumps('Missing parameters')
-        }
+        table.update_item(
+            Key={'request_id': request_id},
+            UpdateExpression="SET #st = :status",
+            ExpressionAttributeNames={"#st": "status"},
+            ExpressionAttributeValues={':status': 'failed'}
+        )
+        return
+
+    table.update_item(
+        Key={'request_id': request_id},
+        UpdateExpression="SET #st = :status",
+        ExpressionAttributeNames={"#st": "status"},
+        ExpressionAttributeValues={':status': 'processing'}
+    )
 
     results = search_flight_live(origin, destination, date, log_file)
 
     if not results:
         write_to_log("No flights found", 'output-bucket-885053922788', log_file)
-        return {
-            'statusCode': 200,
-            'body': json.dumps('No flights found')
-        }
+        table.update_item(
+            Key={'request_id': request_id},
+            UpdateExpression="SET #st = :status",
+            ExpressionAttributeNames={"#st": "status"},
+            ExpressionAttributeValues={':status': 'completed'},
+            ReturnValues="UPDATED_NEW"
+        )
+        return
 
     write_to_log("Search completed successfully", 'output-bucket-885053922788', log_file)
+    table.update_item(
+        Key={'request_id': request_id},
+        UpdateExpression="SET #st = :status, result = :result",
+        ExpressionAttributeNames={"#st": "status"},
+        ExpressionAttributeValues={
+            ':status': 'completed',
+            ':result': results
+        },
+        ReturnValues="UPDATED_NEW"
+    )
+
+def lambda_handler(event, context):
+    for record in event['Records']:
+        message = json.loads(record['body'])
+        process_event(message)
     return {
         'statusCode': 200,
-        'body': json.dumps(results)
+        'body': json.dumps('Processing complete')
     }
